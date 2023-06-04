@@ -20,8 +20,8 @@ import { Badge } from "components/ui/badge";
 import { Label } from "components/ui/label";
 import { Input } from "components/ui/input";
 import { useEffect, useState } from "react";
-import { Cog , CogIcon} from "lucide-react";
-
+import { CogIcon} from "lucide-react";
+import { Slider } from "components/ui/slider";
 
 /**
  * 
@@ -39,6 +39,7 @@ const Home: NextPage = () => {
   const [negatives, setNegatives] = useState<string[]>([])
   const [tldList, setTldList] = useState([".com",".net"])
   const [generatedDomains, setGeneratedDomains] = useState<any[]>([])
+  const [creativity, setCreativity] = useState([0.5])
 
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -50,38 +51,55 @@ const Home: NextPage = () => {
     setNegatives(negatives.filter((_, i) => i !== index));
   }
 
+
   useEffect(() => {
     //SORT generatedDomains
     console.log(generatedDomains)
   }, [generatedDomains])
 
-  async function getBrandNames(batchAmount: number){
-    for (let i = 0; i < batchAmount; i++) {
-      const data =  await getBrandNamesBatch()
-      setGeneratedDomains((prev) => [...prev, ...data])
-    }
-  }
-
-  async function getBrandNamesBatch(){
+  async function getBrandNames(){
 
     const response = await fetch("api/brand", {
       method: "POST",
       body: JSON.stringify({
-        generatedDomains,
         info,
         style,
         positives,
         negatives,
+        temperature: creativity[0],
         tldList
       })
     })
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
+      console.log("Response error")
       return
     }
-    const data = await response.json()
-    //Sort generatedDomains on ranking
-    return data
+
+    const reader = response.body.getReader();
+
+    const decoder = new TextDecoder('utf-8');
+
+    reader.read().then(function processChunk({done, value}): any {
+      if (done) {
+        return;
+      }
+
+      const result = decoder.decode(value);
+      const chunks = result.split('\n');
+
+    chunks.forEach(chunk => {
+      if (chunk) { // Make sure the line is not empty
+        const data = JSON.parse(chunk);
+
+        // Update the state with the new objects
+        setGeneratedDomains(prevDomains => [...prevDomains, ...data]);
+      }
+    });
+
+      // Read the next chunk
+      return reader.read().then(processChunk);
+    });
   }
 
   return (
@@ -104,7 +122,7 @@ const Home: NextPage = () => {
             <Textarea value={info} onChange={(e) => setInfo(e.target.value)} placeholder="Describe your business" className="w-full h-40"/>
             <div className="flex w-full justify-between">
               <Button onClick={() => setShowAdvanced(!showAdvanced)} className="self-start bg-gray-200 text-gray-600 font-normal hover:bg-gray-300"> <CogIcon className="w-5 h-5 -ml-2 mr-2"/> Advanced settings</Button>
-              <Button className="w-28" onClick={() => getBrandNames(3)}> Create </Button>
+              <Button className="w-28" onClick={() => getBrandNames()}> Create </Button>
             </div>
             <Card className={`${showAdvanced ? "flex" : "hidden"} self-start p-4 flex-col gap-4`}>
             <div>
@@ -151,7 +169,7 @@ const Home: NextPage = () => {
                   Add
                 </Button>
               </div>
-              <div className="space-x-1 mt-2">
+              <div className="space-x-1">
                 {
                   negatives.map((word, index) => {
                     return (
@@ -161,9 +179,26 @@ const Home: NextPage = () => {
                 }
               </div>
             </div>
+            
+            <div className="">
+              <Label>Creativity</Label>
+              <div className="flex gap-2">
+                <Slider
+                  value={creativity}
+                  onValueChange={(value) => setCreativity(value)}
+                  defaultValue={[0.5]}
+                  max={1}
+                  min={0}
+                  step={0.1}
+                />
+                <p className="font-semibold"> {creativity}</p>
+              </div>
+            </div>
+            
+
           </Card>
             
-            
+          
             
           </div>
         </div>
