@@ -4,6 +4,10 @@ import {getGoDaddyData} from "~/lib/domain"
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSocialData } from "~/lib/social";
 
+export const config = {
+    runtime: 'edge', // this is a pre-requisite
+  };
+
 const brandCreateSchema = z.object({
     info: z.string(),
     style: z.string(),
