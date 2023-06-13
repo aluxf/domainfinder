@@ -2,6 +2,7 @@ import z from "zod"
 import { generateBrands, brandPrompt} from "~/lib/openai"
 import {getGoDaddyData} from "~/lib/domain"
 import { NextApiRequest, NextApiResponse } from 'next';
+import { getSocialData } from "~/lib/social";
 
 const brandCreateSchema = z.object({
     info: z.string(),
@@ -12,7 +13,12 @@ const brandCreateSchema = z.object({
     tldList: z.string().array()
 })
 
-async function getDomainNameBatch(brandNames:string[], tldList: string[]) {
+interface BrandData {
+    brand: string,
+    tlds: Record<string,number>,
+}
+
+async function getBrandTldData(brandNames:string[], tldList: string[]) {
     const domains: string[] = []
     for (const brandName of brandNames) {
         for (const tld of tldList) {
@@ -21,15 +27,25 @@ async function getDomainNameBatch(brandNames:string[], tldList: string[]) {
         }
     }
     const goDaddyData = await getGoDaddyData(domains)
-    const domainDatas =  goDaddyData.filter(
+    const brandTldData: Record<string, Record<string,number>>  = {};
+    goDaddyData.filter(
         (data: any) => data.available == true
     ).map((data: any) => {
-        return {
-            name: data.domain,
-            price: data.price
+        const [name,tld] = data.domain.split(".")
+        const price = data.price / 10**6
+        const tld_obj = brandTldData[name]
+        if (!tld_obj) {
+            brandTldData[name] = {
+                [tld] : price
+            }
+            return
         }
+
+        tld_obj[tld] = price
+        return
     })
-    return domainDatas
+
+    return brandTldData
 }
 
 export default async function POST(req: NextApiRequest, res: NextApiResponse) {
@@ -39,14 +55,20 @@ export default async function POST(req: NextApiRequest, res: NextApiResponse) {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Transfer-Encoding', 'chunked');
         
-        console.log(temperature)
         let prevBrandNames:string[] = []
         for (let i = 0; i < 3; i++) {
+            const responseData: BrandData[] = []
             const prompt = brandPrompt(promptData, prevBrandNames, 10)
             const brandNames: string[] = await generateBrands(prompt, temperature)
             prevBrandNames = [...prevBrandNames, ...brandNames]
-            const domainDatas = await getDomainNameBatch(brandNames, tldList)
-            res.write(JSON.stringify(domainDatas) + "\n")
+            const brandTldData = await getBrandTldData(brandNames, tldList)
+            for (const brandName in brandTldData) {
+                responseData.push({
+                    brand: brandName,
+                    tlds: brandTldData[brandName]!,
+                })
+            }
+            res.write(JSON.stringify(responseData) + "\n")
         }
         res.end()
     }

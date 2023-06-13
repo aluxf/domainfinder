@@ -20,8 +20,18 @@ import { Badge } from "components/ui/badge";
 import { Label } from "components/ui/label";
 import { Input } from "components/ui/input";
 import { useEffect, useState } from "react";
-import { CogIcon} from "lucide-react";
+import { CogIcon,Twitter, TwitterIcon, InstagramIcon, YoutubeIcon, LucideIcon} from "lucide-react";
 import { Slider } from "components/ui/slider";
+
+interface SocialIconProps{
+  Icon: LucideIcon,
+  style: string,
+  free: boolean
+}
+
+function SocialIcon({Icon, style, free} : SocialIconProps) {
+  return <Icon className={`${free ? style + " text-white": "bg-gray-300 text-gray-400"} p-1 rounded-full`} size={30}/>
+}
 
 /**
  * 
@@ -37,11 +47,13 @@ const Home: NextPage = () => {
   const [positiveInput, setPositiveInput] = useState("")
   const [negativeInput, setNegativeInput] = useState("")
   const [negatives, setNegatives] = useState<string[]>([])
-  const [tldList, setTldList] = useState([".com",".net"])
-  const [generatedDomains, setGeneratedDomains] = useState<any[]>([])
+  const [tldList, setTldList] = useState([".com"])
+  const [brands, setBrands] = useState<any[]>([])
+  const [socials, setSocials] = useState<any>({})
   const [creativity, setCreativity] = useState([0.5])
 
   const [showAdvanced, setShowAdvanced] = useState(false)
+
 
   function removePositive(index:number) {
     setPositives(positives.filter((_, i) => i !== index));
@@ -51,11 +63,37 @@ const Home: NextPage = () => {
     setNegatives(negatives.filter((_, i) => i !== index));
   }
 
+  function addPositive() {
+    setPositives((prev) => [...prev, positiveInput])
+    setPositiveInput("")
+  }
+
+  function addNegative() {
+    setNegatives((prev) => [...prev, negativeInput])
+    setNegativeInput("")
+  }
 
   useEffect(() => {
-    //SORT generatedDomains
-    console.log(generatedDomains)
-  }, [generatedDomains])
+    console.log("use effect")
+    console.log(socials)
+    console.log(socials["SipSational"])
+  }, [brands,socials])
+
+  async function getSocialData(brandNames: string[]) {
+    const response = await fetch("api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        brands: brandNames
+      })
+    })
+    if (!response.ok || !response.body) {
+      console.log("SocialData - response error")
+      return
+    }
+
+    const data = await response.json()
+    return data
+  }
 
   async function getBrandNames(){
 
@@ -88,12 +126,19 @@ const Home: NextPage = () => {
       const result = decoder.decode(value);
       const chunks = result.split('\n');
 
-    chunks.forEach(chunk => {
+      chunks.forEach(async (chunk) => {
       if (chunk) { // Make sure the line is not empty
         const data = JSON.parse(chunk);
-
+        console.log(data)
         // Update the state with the new objects
-        setGeneratedDomains(prevDomains => [...prevDomains, ...data]);
+        setBrands(prevBrands => [...prevBrands, ...data]);
+        // Fetch social data without waiting for the result
+        getSocialData(data.map((brand:any) => brand.brand))
+          .then((socialData) => {
+
+            setSocials((prevSocial: any) => ({...prevSocial, ...socialData}));
+          })
+          .catch((error) => console.log(error)); // Catch any errors from getSocialData
       }
     });
 
@@ -144,7 +189,7 @@ const Home: NextPage = () => {
               <Label>Include words</Label>
               <div className="flex">
                 <Input onChange={(e) => setPositiveInput(e.target.value)} value={positiveInput} className="h-8 focus-visible:ring-0" placeholder="e.g. 'AI'"/>
-                <Button onClick={() => setPositives((prev) => [...prev, positiveInput])} className="h-7 self-center ml-3 text-xs">
+                <Button onClick={() => addPositive()} className="h-7 self-center ml-3 text-xs">
                   Add
                 </Button>
               </div>
@@ -165,7 +210,7 @@ const Home: NextPage = () => {
               <Label>Exclude words</Label>
               <div className="flex">
                 <Input onChange={(e) => setNegativeInput(e.target.value)} value={negativeInput} className="h-8 focus-visible:ring-0" placeholder="e.g. 'Super'"></Input>
-                <Button onClick={() => setNegatives((prev) => [...prev, negativeInput])} className="h-7 self-center ml-3 text-xs">
+                <Button onClick={() => addNegative()} className="h-7 self-center ml-3 text-xs">
                   Add
                 </Button>
               </div>
@@ -205,39 +250,45 @@ const Home: NextPage = () => {
 
         <div className="flex flex-col items-center mb-auto gap-4">
             
-            {
-              generatedDomains.map((domain, index) => {
+        {
+            brands.map((brand, index) => (
+              Object.entries(brand.tlds).map(([tld, price] : [string,any], tldIndex) => {
                 return (
-                  <Card key={index}>
-              <div className="p-6 flex flex-row gap-8">
-                <div className=" flex-1">
-                  <h2 className="font-semibold text-xl"> {domain.name}</h2>
-                  <div className="flex flex-row gap-10 mt-6">
-                    <div className="font-semibold sm:whitespace-nowrap text-gray-400">
-                      <p> SOCIALS AVAILABLE </p>
+                  <Card key={`${index}-${tldIndex}`}>
+                    <div className="p-6 flex flex-row gap-8">
+                      <div className=" flex-1">
+                        <h2 className="font-semibold text-xl"> {brand.brand + "." + tld}</h2>
+                        <div className="flex flex-row gap-10 mt-6">
+                          <div className="font-semibold sm:whitespace-nowrap text-gray-400 space-y-2">
+                            <p> SOCIALS </p>
+                            <div className="inline-flex gap-1 ">
+                              <SocialIcon Icon={TwitterIcon} style={"bg-blue-400"} free={socials[brand.brand]?.twitter}/>
+                              <SocialIcon Icon={InstagramIcon} style={"bg-gradient-to-br from-[#4f5bd5] via-[#d62976] to-[#feda75]"} free={socials[brand.brand]?.instagram}/>
+                              <SocialIcon Icon={YoutubeIcon} style={"bg-red-400"} free={socials[brand.brand]?.youtube}/>
+                            </div>
+                          </div>
+                          <div className="font-semibold text-gray-400">
+                            <p> RECALL </p>
+                          </div>
+                          <div className="font-semibold text-gray-400">
+                            <p> READABILITY </p>
+                          </div>
+                          <div className="font-semibold text-gray-400">
+                            <p> LENGTH </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col w-32 items-center justify-center gap-6">
+                        <p className="font-semibold text-lg"> $ {price} / year</p>
+                        <Button>Purchase</Button>
+                      </div>
                     </div>
-                    <div className="font-semibold text-gray-400">
-                      <p> RECALL </p>
-                    </div>
-                    <div className="font-semibold text-gray-400">
-                      <p> READABILITY </p>
-                    </div>
-                    <div className="font-semibold text-gray-400">
-                      <p> LENGTH </p>
-                    </div>
-                  </div>
-                 
-                </div>
-                
-                <div className="flex flex-col w-32 items-center justify-center gap-6">
-                  <p className="font-semibold text-lg"> $ {domain.price / 10**6} / year</p>
-                  <Button>Purchase</Button>
-                </div>
-              </div>
-            </Card>
+                  </Card>
                 )
               })
-            }
+            ))
+          }
+
           </div>
         
       </div>
